@@ -1,16 +1,16 @@
 # BTO APIs and Tutorials for COSIpy spectral fitting
 
-This is a project for how to use the BTO in COSIpy spectral fitting.   
+This is a project for how to use the BTO in COSIpy spectral fitting framework.   
 This includes a set of Jupyter notebooks that demonstrate how to construct BTO responses, generate fake observations, and compare COSI Compton-camera-only (CC) spectral fits with joint CC+BTO1+BTO2 fits.  
 The notebooks use standard COSIpy likelihood classes, standard threeML `OGIPLike` plugins and the public `bto_response` module. 
 
 ## Notebook Examples
 
-| Notebook                                                                        | What you learn                                                                                                                                                                |
-| ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [01 — BTO API and response quick looks](notebooks/01_bto_response_api.ipynb)    | Inspect HDF5, plot directional area maps, apply detector effects, write/read OGIP, regrid background, simulate a fake spectrum and load it in threeML. No CC input is needed. |
-| [02 — Fixed cross-normalization](notebooks/02_grb_cc_bto_fixed_crossnorm.ipynb) | Generate CC and both BTO fake datasets, then fit CC only and CC+BTO1+BTO2 with both BTO effective-area correction factors fixed to one.                                       |
-| [03 — Free cross-normalization](notebooks/03_grb_cc_bto_free_crossnorm.ipynb)   | Run the same experiment while independently fitting BTO1-to-CC and BTO2-to-CC factors in 0.5–1.5. CC remains the reference, not a frozen spectrum.                            |
+| Notebook                                                                       | What you learn                                                                                                                                                                |
+| ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [01: BTO API and response quick looks](notebooks/01_bto_response_api.ipynb)    | Inspect HDF5, plot directional area maps, apply detector effects, write/read OGIP, regrid background, simulate a fake spectrum and load it in threeML. No CC input is needed. |
+| [02: Fixed cross-normalization](notebooks/02_grb_cc_bto_fixed_crossnorm.ipynb) | Generate CC and both BTO fake datasets, then fit CC only and CC+BTO1+BTO2 with both BTO effective-area correction factors fixed to one.                                       |
+| [03: Free cross-normalization](notebooks/03_grb_cc_bto_free_crossnorm.ipynb)   | Run the same experiment while independently fitting BTO1-to-CC and BTO2-to-CC factors in 0.5–1.5. CC remains the reference, not a frozen spectrum.                            |
 
 Use the installed `cosipy` kernel with COSIpy, HistPy, Astropy, NumPy/SciPy,
 h5py, Matplotlib, pandas, astromodels and threeML. In Section 1, set only `project_path`. All input paths use its `response/`
@@ -77,13 +77,13 @@ background_template_path = response_path / 'BTO_background_template_10-3000keV.f
 All inputs are read-only; notebook outputs go under this project's
 `notebook_output/{fixed_crossnorm,free_crossnorm,bto_api}`.
 
-| Variable                                                                    | Default file                                                                            | Meaning                                                                                                                                                                                                |
-| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `cc_response_path`                                                          | `response/SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.h5` | COSIpy's full simulated Compton response from incident direction/true energy to measured energy, scatter angle and scattered-photon direction. Neither source counts nor a 1D RMF. GRB notebooks only. |
-| `orientation_path`                                                          | `response/20280301_3_month_with_orbital_info.fits`                                      | Simulated timestamps, X/Z pointing, Earth zenith, altitude and livetime. Transforms the celestial source into spacecraft directions and supplies interval exposure. Shared by CC and BTO.              |
-| `cc_time_resolved_background_path`                                          | `response/bkg_binned_data_1s_local.hdf5`                                                | One-second albedo-photon CC background histogram in `Time, Em, Phi, PsiChi`. Supplies both measurement axes and OFF-background shape. GRB notebooks only.                                              |
-| `bto_response_h5_path` (`response_h5_path` in API notebook)                 | `response/bto_response_order2.h5`                                                       | This project's all-direction, **unsmeared** Geant4 BTO1/BTO2 deposit response. The input to detector-model application and new OGIP generation.                                                        |
-| `bto_background_template_path` (`background_template_path` in API notebook) | `response/BTO_background_template_10-3000keV.fits`                                      | Simulated mean single-BTO background spectrum in counts/s/channel. Constant in time for this example; used separately for both BTOs.                                                                   |
+| Variable                                                                    | Default file                                                                            | Meaning                                                                                                                                                             |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cc_response_path`                                                          | `response/SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.h5` | COSIpy's full simulated Compton response from incident direction/true energy to measured energy, scatter angle and scattered-photon direction.                      |
+| `orientation_path`                                                          | `response/20280301_3_month_with_orbital_info.fits`                                      | Simulated timestamps, X/Z pointing, Earth zenith, altitude and livetime. Transforms the celestial source into spacecraft directions and supplies interval exposure. |
+| `cc_time_resolved_background_path`                                          | `response/bkg_binned_data_1s_local.hdf5`                                                | One-second albedo-photon CC background histogram in `Time, Em, Phi, PsiChi`. Supplies both measurement axes and OFF-background shape.                               |
+| `bto_response_h5_path` (`response_h5_path` in API notebook)                 | `response/bto_response_order2.h5`                                                       | This project's all-direction, **unsmeared** Geant4 BTO1/BTO2 deposit response. The input to detector-model application and new OGIP generation.                     |
+| `bto_background_template_path` (`background_template_path` in API notebook) | `response/BTO_background_template_10-3000keV.fits`                                      | Simulated mean single-BTO background spectrum in counts/s/channel. Constant in time for this example; used separately for both BTOs.                                |
 
 The CC inputs are distributed by COSIpy; the BTO response and BAK are project
 products. COSIpy's [example source](https://github.com/cositools/cosipy/blob/main/docs/api/interfaces/examples/grb/example_grb_fit_threeml_plugin_interfaces.py)
@@ -127,15 +127,13 @@ calibration becomes available; the likelihood/OGIP workflow remains the same.
 
 ## Background model and energy grid
 
-`BTO_background_template_10-3000keV.fits` was produced by the project's `make_bto_background_ogip.py`
-from the reference single-BTO simulation used in `opt_bkd_bto.ipynb`. It combines:
-
+`BTO_background_template_10-3000keV.fits` was produced from the reference single-BTO simulation (conducted by S.Takashima, S.Nagasawa and H.Yoneda).   
+It combines:  
 - cosmic photons and SAA protons;
 - primary protons, electrons, positrons and alphas;
 - albedo photons and neutrons;
 - secondary protons, electrons and positrons.
 
-The preparation applies the component scale factors and five-bin smoothing.
 The result is a mean spectrum, not a Poisson realization or flight measurement.
 It does not encode the full systematic covariance from smoothing, environmental
 variation or component normalization.
