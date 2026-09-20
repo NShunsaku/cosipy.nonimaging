@@ -327,19 +327,19 @@ error instead of silently choosing one.
   A `BTOCalibration` object defining the channel count, quadratic gain,
   threshold and saturation. The gain convention is
 
-  \[
+  $$
   {\rm channel}
   = aE_{\rm measured}^{2}+bE_{\rm measured}+c .
-  \]
+  $$
 
 - `resolution`  
   A `BTOResolution` object defining
 
-  \[
+  $$
   \sigma(E)=\sqrt{a_0+a_1E+a_2E^2},
   \qquad
   {\rm FWHM}(E)=2\sqrt{2\ln2}\,\sigma(E).
-  \]
+  $$
 
 - `threshold_keV`  
   Optional one-call override of the lower threshold stored in `calibration`.
@@ -380,10 +380,10 @@ The returned `BTOResponseProduct` contains, among other fields:
 - `unsmeared_arf_cm2[n_photon]`  
   Sum of the unsmeared area matrix over all deposited-energy bins:
 
-  \[
+  $$
   A_{\rm unsmeared}(E_i)
   =\sum_k A_{\rm deposit}(E_i,E_{{\rm dep},k}).
-  \]
+  $$
 
 - `photopeak_arf_cm2[n_photon]`  
   A full-energy-deposit proxy based on the deposit-energy bins. This is a
@@ -400,10 +400,10 @@ The returned `BTOResponseProduct` contains, among other fields:
 - `rsp_cm2[n_photon, n_channel]`  
   Full area-valued response used to fold a photon spectrum:
 
-  \[
+  $$
   {\rm RSP}_{ij}
   ={\rm ARF}_i\,{\rm RMF}_{ij}.
-  \]
+  $$
 
 - `metadata`  
   Detector name, direction mode, source/time information, interpolation
@@ -442,17 +442,17 @@ Their meanings are:
   Stores `rmf_probability`, the conditional redistribution from true photon
   energy to measured channel. For every nonzero-ARF row,
 
-  \[
+  $$
   \sum_j {\rm RMF}_{ij}=1.
-  \]
+  $$
 
 - **RSP**  
   Stores `rsp_cm2`, the combined area-valued matrix. Unlike an RMF, its rows
   are not normalized to one:
 
-  \[
+  $$
   \sum_j {\rm RSP}_{ij}={\rm ARF}_i.
-  \]
+  $$
 
 - **Response metadata JSON**  
   Preserves information that is not fully represented by the OGIP tables,
@@ -599,10 +599,10 @@ The output BAK stores:
 
 `exposure_s` is used to construct the Poisson-equivalent statistical error,
 
-\[
+$$
 {\rm STAT\_ERR}_j
 =\frac{\sqrt{R_j\,T}}{T},
-\]
+$$
 
 where \(R_j\) is the mean rate in channel \(j\) and \(T\) is the supplied
 exposure. It does not Poisson-randomize the mean background.
@@ -636,11 +636,11 @@ fake = simulate_bto_spectrum(
 
 - a callable returning the differential photon spectrum
 
-  \[
+  $$
   \frac{dN}{dE}
   \quad
   [{\rm ph\ cm^{-2}\ s^{-1}\ keV^{-1}}],
-  \]
+  $$
 
   evaluated at energies in keV; or
 
@@ -653,37 +653,37 @@ width.
 
 The expected source counts in measured channel \(j\) are
 
-\[
+$$
 \mu_{{\rm src},j}
 =
 T\sum_i
 F_i\,{\rm RSP}_{ij},
-\]
+$$
 
 where \(F_i\) is the photon flux integrated over true-energy bin \(i\), and
 \(T\) is `exposure_s`.
 
 If a `BTOBackground` is supplied,
 
-\[
+$$
 \mu_{{\rm bkg},j}=T R_{{\rm bkg},j},
-\]
+$$
 
 and
 
-\[
+$$
 \mu_{{\rm total},j}
 =
 \mu_{{\rm src},j}
 +
 \mu_{{\rm bkg},j}.
-\]
+$$
 
 With `poisson=True`, the simulated channel counts are drawn as
 
-\[
+$$
 N_j\sim{\rm Poisson}(\mu_{{\rm total},j}).
-\]
+$$
 
 `random_seed` makes this realization reproducible. No dead-time correction,
 pile-up or additional electronics effect is silently applied.
