@@ -1,8 +1,8 @@
-# BTO APIs and Tutorials for COSIpy spectral fitting
+# BTO APIs and Tutorials for cosipy spectral fitting
 
-This is a project for how to use the BTO in COSIpy spectral fitting framework.   
+This is a project for how to use the BTO in cosipy spectral fitting framework.   
 This includes a set of Jupyter notebooks that demonstrate how to construct BTO responses, generate fake observations, and compare COSI Compton-camera-only (CC) spectral fits with joint CC+BTO1+BTO2 fits.  
-The notebooks use standard COSIpy likelihood classes, standard threeML `OGIPLike` plugins and the public `bto_response` module. 
+The notebooks use standard cosipy likelihood classes, standard threeML `OGIPLike` plugins and the public `bto_response` module. 
 
 ------- 
 
@@ -14,15 +14,12 @@ The notebooks use standard COSIpy likelihood classes, standard threeML `OGIPLike
 | [02: Fixed cross-normalization](notebooks/02_grb_cc_bto_fixed_crossnorm.ipynb) | Generate CC and both BTO fake datasets, then fit CC only and CC+BTO1+BTO2 with both BTO effective-area correction factors fixed to one.                                       |
 | [03: Free cross-normalization](notebooks/03_grb_cc_bto_free_crossnorm.ipynb)   | Run the same experiment while independently fitting BTO1-to-CC and BTO2-to-CC factors in 0.5–1.5. CC remains the reference, not a frozen spectrum.                            |
 
-Use the installed `cosipy` kernel with COSIpy, HistPy, Astropy, NumPy/SciPy,
-h5py, Matplotlib, pandas, astromodels and threeML. In Section 1, set only `project_path`. All input paths use its `response/`
-subdirectory, and the BTO module is bundled in `api/`. 
+Use the installed python kernel with cosipy, HistPy, Astropy, NumPy/SciPy, h5py, Matplotlib, pandas, astromodels and threeML. In Section 1, set only `project_path`.   
+All input paths use its `response/` subdirectory, and the BTO module is bundled in `api/`. 
 
 ## Input files
 
 All paths below are relative to `project_path`, the directory containing this README.
-The five scientific inputs are ordinary local copies (about 1.48 GB total), not symlinks.
-Move the whole project and change only `project_path`; the installed Python environment is still required.
 
 ```text
 project_path/
@@ -32,39 +29,24 @@ project_path/
 │   ├── 20280301_3_month_with_orbital_info.fits
 │   ├── bkg_binned_data_1s_local.hdf5
 │   ├── bto_response_order2.h5
-│   ├── BTO_background_template_10-3000keV.fits
+│   └── BTO_background_template_10-3000keV.fits
 ├── notebooks/                # Jupyter notebooks for the tutorial
 └── notebook_output/          # Generated products, not inputs
 ```
 
 
-## Scientific example and COSIpy reference
+## Scientific example and cosipy reference
 
-This tutorial extends the COSIpy [GRB spectral-fitting example](https://cositools-cosipy.readthedocs.io/en/latest/tutorials/spectral_fits/continuum_fit/grb/SpectralFit_GRB.html)
-([source notebook](https://github.com/cositools/cosipy/blob/main/docs/tutorials/spectral_fits/continuum_fit/grb/SpectralFit_GRB.ipynb)).
-The reference example identifies its simulated burst as **GRB090206620** and
-uses Galactic `(l,b)=(93,-53)` degrees. We adopt that simulated position and
-injected Band spectrum, generate new response-consistent Poisson data, and add
-the two BTO detectors. The 40 s interval starts at **2028-05-22 08:36:50 UTC**
-in the simulated spacecraft history; this is not the historical GRB date or
-a flight observation.
+This tutorial extends the cosipy [GRB spectral-fitting example](https://cositools-cosipy.readthedocs.io/en/latest/tutorials/spectral_fits/continuum_fit/grb/SpectralFit_GRB.html)
+([source notebook](https://github.com/cositools/cosipy/blob/main/docs/tutorials/spectral_fits/continuum_fit/grb/SpectralFit_GRB.ipynb)).  
+The reference example identifies its simulated burst as **GRB090206620** and uses Galactic `(l,b)=(93,-53)` degrees. We adopt that simulated position and injected Band spectrum, generate new response-consistent Poisson data, and add the two BTO detectors. The 40 s interval starts at **2028-05-22 08:36:50 UTC** in the simulated spacecraft history; this is not the historical GRB date or a flight observation.
 
-The supplied **CC background contains the albedo-photon simulation** described
-by the COSIpy example. It is not a total satellite-background model. Cosmic
-diffuse photons, charged particles, neutrons and activation/SAA components must
-not be assumed present. The background file matches the official download
-checksum. Its `PsiChi` axis is explicitly `spacecraftframe`, matching the local
-coordinate convention used by the installed response implementation.
+The supplied **CC background contains the albedo-photon simulation** described by the cosipy example. It is not a total satellite-background model. Cosmic diffuse photons, charged particles, neutrons and activation/SAA components must not be assumed present. 
 
-The BTO background is a different, 11-component simulation. Therefore the
-CC-versus-joint comparison teaches joint fitting and the effect of BTO in this
-specified example; it is **not a full-background mission sensitivity forecast**.
-
+The BTO background is a different, 11-component simulation. Therefore the CC-versus-joint comparison teaches joint fitting and the effect of BTO in this specified example; it is **not a full-background mission sensitivity forecast**.
 
 
 ```python
-from pathlib import Path
-import sys
 
 project_path = Path('/path/to/bto')
 response_path = project_path / 'response'
@@ -76,58 +58,34 @@ orientation_path = response_path / '20280301_3_month_with_orbital_info.fits'
 background_template_path = response_path / 'BTO_background_template_10-3000keV.fits'
 ```
 
-All inputs are read-only; notebook outputs go under this project's
-`notebook_output/{fixed_crossnorm,free_crossnorm,bto_api}`.
+All inputs are read-only; 
+Notebook outputs go under this project's `notebook_output/{fixed_crossnorm free_crossnorm,bto_api}`.  
 
-| Variable                                                                    | Default file                                                                            | Meaning                                                                                                                                                             |
-| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cc_response_path`                                                          | `response/SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.h5` | COSIpy's full simulated Compton response from incident direction/true energy to measured energy, scatter angle and scattered-photon direction.                      |
-| `orientation_path`                                                          | `response/20280301_3_month_with_orbital_info.fits`                                      | Simulated timestamps, X/Z pointing, Earth zenith, altitude and livetime. Transforms the celestial source into spacecraft directions and supplies interval exposure. |
-| `cc_time_resolved_background_path`                                          | `response/bkg_binned_data_1s_local.hdf5`                                                | One-second albedo-photon CC background histogram in `Time, Em, Phi, PsiChi`. Supplies both measurement axes and OFF-background shape.                               |
-| `bto_response_h5_path` (`response_h5_path` in API notebook)                 | `response/bto_response_order2.h5`                                                       | This project's all-direction, **unsmeared** Geant4 BTO1/BTO2 deposit response. The input to detector-model application and new OGIP generation.                     |
-| `bto_background_template_path` (`background_template_path` in API notebook) | `response/BTO_background_template_10-3000keV.fits`                                      | Simulated mean single-BTO background spectrum in counts/s/channel. Constant in time for this example; used separately for both BTOs.                                |
+| Variable                                                                    | Default file                                                                            | Meaning                                                                                                                                                                                   |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cc_response_path`                                                          | `response/SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.h5` | COSI Compton camera continum response used for tutorial.                                                                                                                                  |
+| `orientation_path`                                                          | `response/20280301_3_month_with_orbital_info.fits`                                      | Satellite information including timestamps, X/Z pointing, Earth zenith, altitude and livetime. Transforms the celestial source into spacecraft directions and supplies interval exposure. |
+| `cc_time_resolved_background_path`                                          | `response/bkg_binned_data_1s_local.hdf5`                                                | One-second albedo-photon CC background histogram in `Time, Em, Phi, PsiChi`. Supplies both measurement axes and OFF-background shape for tutorial.                                        |
+| `bto_response_h5_path` (`response_h5_path` in API notebook)                 | `response/bto_response_order2.h5`                                                       | All-direction, **unsmeared** Meaglib/Cosima BTO1/BTO2 deposit response. The input to detector-model application and new OGIP generation.                                                  |
+| `bto_background_template_path` (`background_template_path` in API notebook) | `response/BTO_background_template_10-3000keV.fits`                                      | Simulated mean single-BTO background spectrum in counts/s/channel. Constant in time for this example                                                                                      |
 
-The CC inputs are distributed by COSIpy; the BTO response and BAK are project
-products. COSIpy's [example source](https://github.com/cositools/cosipy/blob/main/docs/api/interfaces/examples/grb/example_grb_fit_threeml_plugin_interfaces.py)
-lists their download locations. The local CC input checksums were verified:
-
-| Input         | Distribution key below `COSI-SMEX/`                                                                            | MD5                                |
-| ------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| CC response   | `cosipy_tutorials/Data/Responses/SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.h5` | `eb72400a1279325e9404110f909c7785` |
-| History       | `DC3/Data/Orientation/20280301_3_month_with_orbital_info.fits`                                                 | `5e69bc1d55fab9390f90635690f62896` |
-| CC background | `cosipy_tutorials/grb_spectral_fit_local_frame/bkg_binned_data_1s_local.hdf5`                                  | `b842a7444e6fc1a5dd567b395c36ae7f` |
-
-The measured CC axes come directly from the background: `Em` has 10 bins
-from 100–10000 keV, `Phi` has 36 bins from 0–180 degrees, and `PsiChi` uses
-NSIDE=8/RING (768 pixels) in spacecraft coordinates. The likelihood operates
-on all `(10,36,768)` CDS bins. Count spectra are energy projections for plotting.
+The CC inputs are distributed by cosipy Wasabi server.  
+See cosipy lists for their download locations:  
+https://github.com/cositools/cosipy/blob/main/docs/api/interfaces/examples/grb/example_grb_fit_threeml_plugin_interfaces.py
+The BTO response and background file are not distributed; Please contact the BTO team for access.  
 
 
-## Calibration and resolution
+| Input             | Distribution key below `COSI-SMEX/`                                                                            | MD5                                |
+| ----------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| CC response       | `cosipy_tutorials/Data/Responses/SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.h5` | `eb72400a1279325e9404110f909c7785` |
+| Satellite History | `DC3/Data/Orientation/20280301_3_month_with_orbital_info.fits`                                                 | `5e69bc1d55fab9390f90635690f62896` |
+| CC background     | `cosipy_tutorials/grb_spectral_fit_local_frame/bkg_binned_data_1s_local.hdf5`                                  | `b842a7444e6fc1a5dd567b395c36ae7f` |
 
-The GRB notebooks explicitly define a configurable placeholder:
+The measured CC axes come directly from the background: `Em` has 10 bins from 100–10000 keV, `Phi` has 36 bins from 0–180 degrees, and `PsiChi` uses NSIDE=8/RING (768 pixels) in spacecraft coordinates.  
+The likelihood operates on all `(10,36,768)` CDS bins. Count spectra are energy projections for plotting.  
 
-```python
-calibration = BTOCalibration(
-    n_channels=4096,
-    gain_quadratic_ch_per_keV2=0.0,
-    gain_slope_ch_per_keV=1.0/0.8125,
-    gain_offset_ch=0.0,
-    lower_threshold_keV=30.0,
-    upper_saturation_keV=3000.0,
-)
-resolution = Prototype_Resolution
-```
 
-Gain is `channel = a*E_measured² + b*E_measured + c`. The API notebook also
-demonstrates a nonzero quadratic coefficient. Resolution is
-`sigma(E) = sqrt(a0 + a1*E + a2*E²)` and `FWHM=2*sqrt(2*ln(2))*sigma`.
-The approximate preset uses FWHM/E = 65/662, anchored to the prototype's
-approximately 65 keV FWHM at 662 keV. It is not the full fitted coefficient set
-or flight calibration. Replace these dataclasses when validated detector-specific
-calibration becomes available; the likelihood/OGIP workflow remains the same.
-
-## Background model and energy grid
+## BTO Background model and energy grid
 
 `BTO_background_template_10-3000keV.fits` was produced from the reference single-BTO simulation (conducted by S.Takashima, S.Nagasawa and H.Yoneda).   
 It combines:  
@@ -239,7 +197,7 @@ unsmeared all-sky BTO HDF5
 | `get_bto_response`      | Select BTO1 or BTO2, interpolate or time-average the unsmeared HDF5 response, and apply the detector effects model       | Master response HDF5, BTO ID and exactly one direction specification | Calibration, resolution, threshold override, Earth-occultation option and OGIP-writing options     | `BTOResponseProduct` containing unsmeared deposit diagnostics and the recorded ARF/RMF/RSP | Can directly write `.arf`, `.rmf`, `.rsp` and `.response.json` when `write_ogip=True` |
 | `write_ogip_response`   | Serialize an already constructed `BTOResponseProduct` into OGIP response files                                           | `BTOResponseProduct` and output prefix                               | `overwrite`                                                                                        | The same response object, with output path attributes populated                            | `.arf`, `.rmf`, `.rsp` and `.response.json`                                           |
 | `load_bto_response`     | Reload a previously generated recorded-channel response without rebuilding it from the master HDF5                       | Combined RSP, or standalone RMF                                      | ARF path when loading a standalone RMF                                                             | `BTOResponseProduct` reconstructed from OGIP                                               | None                                                                                  |
-| `get_bto_background`    | Put a time-independent background spectrum on exactly the measured-energy grid of one response                           | `BTOResponseProduct`                                                 | Self-contained background template, explicit per-channel rate, total rate, or compatible PHA input | `BTOBackground` in counts s\(^{-1}\) channel\(^{-1}\)                                      | None                                                                                  |
+| `get_bto_background`    | Put a time-independent background spectrum on exactly the measured-energy grid of one response                           | `BTOResponseProduct`                                                 | Self-contained background template, explicit per-channel rate, total rate, or compatible PHA input | `BTOBackground` in counts s$^{-1}$ channel$^{-1}$                                          | None                                                                                  |
 | `write_ogip_background` | Write the mean background on the response channel grid as an OGIP BAK                                                    | `BTOBackground`, matching response and output filename               | Statistical exposure and `overwrite`                                                               | The same background object, with its output path populated                                 | `.bak`                                                                                |
 | `simulate_bto_spectrum` | Integrate a photon model in true-energy bins, fold it through the RSP, add background and optionally draw Poisson counts | Response, photon model and exposure                                  | Background, Poisson switch, random seed and PHA output filename                                    | `BTOSpectrumSimulation` containing all source/background expectations and sampled counts   | Type-I `.pha`                                                                         |
 
@@ -295,8 +253,8 @@ summed or exchanged internally.
      phi_deg=...,
      ```
 
-     Here, `theta_deg` is the colatitude from spacecraft \(+Z\), and `phi_deg`
-     is the azimuth measured from \(+X\) toward \(+Y\).
+     Here, `theta_deg` is the colatitude from spacecraft $+Z$, and `phi_deg`
+     is the azimuth measured from $+X$ toward $+Y$.
 
   2. Fixed spacecraft unit vector:
 
@@ -541,10 +499,10 @@ Supply the response and at most one background source:
 - `background_template=path`  
   Recommended for this tutorial. The FITS file contains both a `SPECTRUM`
   extension and its own `EBOUNDS`. `RATE`, or `COUNTS/EXPOSURE`, is converted
-  into counts s\(^{-1}\) per native bin and conservatively regridded.
+  into counts s$^{-1}$ per native bin and conservatively regridded.
 
 - `rate_per_channel=array_or_scalar`  
-  Explicit background rate in counts s\(^{-1}\) channel\(^{-1}\). An array must
+  Explicit background rate in counts s$^{-1}$ channel$^{-1}$. An array must
   already match the response channel count. A scalar is repeated over channels.
 
 - `total_rate_hz=value`  
@@ -566,7 +524,7 @@ channels outside that range receive zero contribution.
 
 `BTOBackground` contains:
 
-- `rate_per_channel[n_channel]` in counts s\(^{-1}\) channel\(^{-1}\);
+- `rate_per_channel[n_channel]` in counts s$^{-1}$ channel$^{-1}$;
 - `measured_energy_edges_keV[n_channel + 1]`, identical to the response grid;
 - provenance and total-rate metadata;
 - `path`, which remains `None` until an OGIP BAK is written.
@@ -592,7 +550,7 @@ number of channels.
 The output BAK stores:
 
 - `CHANNEL`;
-- mean `RATE` in counts s\(^{-1}\);
+- mean `RATE` in counts s$^{-1}$;
 - `STAT_ERR`;
 - `QUALITY`, `GROUPING`, `AREASCAL` and `BACKSCAL`;
 - detector and response metadata.
@@ -604,7 +562,7 @@ $$
 =\frac{\sqrt{R_j\,T}}{T},
 $$
 
-where \(R_j\) is the mean rate in channel \(j\) and \(T\) is the supplied
+where $R_j$ is the mean rate in channel $j$ and $T$ is the supplied
 exposure. It does not Poisson-randomize the mean background.
 
 After writing:
@@ -643,20 +601,20 @@ fake = simulate_bto_spectrum(
   evaluated at energies in keV; or
 
 - an array containing the already integrated photon flux in each true-energy
-  bin, in ph cm\(^{-2}\) s\(^{-1}\) per bin.
+  bin, in ph cm$^{-2}$ s$^{-1}$ per bin.
 
 For a callable, the function numerically integrates the model inside every
 true-energy bin. It does not simply multiply a bin-center value by the bin
 width.
 
-The expected source counts in measured channel \(j\) are
+The expected source counts in measured channel $j$ are
 
 $$
 \mu_{{\rm src},j} = T\sum_i F_i\,{\rm RSP}_{ij},
 $$
 
-where \(F_i\) is the photon flux integrated over true-energy bin \(i\), and
-\(T\) is `exposure_s`.
+where $F_i$ is the photon flux integrated over true-energy bin $i$, and
+$T$ is `exposure_s`.
 
 If a `BTOBackground` is supplied,
 
@@ -767,8 +725,7 @@ from astromodels import Band
 from threeML.plugins.OGIPLike import OGIPLike
 
 project_path = Path(
-    "/Users/shunsaku/work/COSI/sim_solar_cosipy/"
-    "tutorial_grb_fit_with_bto_response"
+    "/path/to/project/"
 )
 response_path = project_path / "response"
 output_path = project_path / "notebook_output" / "example"
