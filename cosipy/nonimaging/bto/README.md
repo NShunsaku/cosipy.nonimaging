@@ -600,7 +600,7 @@ The output BAK stores:
 `exposure_s` is used to construct the Poisson-equivalent statistical error,
 
 $$
-{\rm STAT\_ERR}_j
+{\rm STAT\_ ERR}_j
 =\frac{\sqrt{R_j\,T}}{T},
 $$
 
@@ -637,9 +637,7 @@ fake = simulate_bto_spectrum(
 - a callable returning the differential photon spectrum
 
   $$
-  \frac{dN}{dE}
-  \quad
-  [{\rm ph\ cm^{-2}\ s^{-1}\ keV^{-1}}],
+  \frac{dN}{dE} \quad [{\rm ph\ cm^{-2}\ s^{-1}\ keV^{-1}}],
   $$
 
   evaluated at energies in keV; or
@@ -654,10 +652,7 @@ width.
 The expected source counts in measured channel \(j\) are
 
 $$
-\mu_{{\rm src},j}
-=
-T\sum_i
-F_i\,{\rm RSP}_{ij},
+\mu_{{\rm src},j} = T\sum_i F_i\,{\rm RSP}_{ij},
 $$
 
 where \(F_i\) is the photon flux integrated over true-energy bin \(i\), and
@@ -672,11 +667,7 @@ $$
 and
 
 $$
-\mu_{{\rm total},j}
-=
-\mu_{{\rm src},j}
-+
-\mu_{{\rm bkg},j}.
+\mu_{{\rm total},j} = \mu_{{\rm src},j} + \mu_{{\rm bkg},j}.
 $$
 
 With `poisson=True`, the simulated channel counts are drawn as
