@@ -1,6 +1,6 @@
 # BTO APIs and Tutorials for cosipy spectral fitting
 
-This is a project for how to use the BTO in cosipy spectral fitting framework.   
+This project provides APIs and tutorials for incorporating BTO data into joint spectral analyses with Ge Compton telescope using the cosipy and threeML frameworks.  
 This includes a set of Jupyter notebooks that demonstrate how to construct BTO responses, generate fake observations, and compare COSI Compton-camera-only (CC) spectral fits with joint CC+BTO1+BTO2 fits.  
 The notebooks use standard cosipy likelihood classes, standard threeML `OGIPLike` plugins and the public `bto_response` module. 
 

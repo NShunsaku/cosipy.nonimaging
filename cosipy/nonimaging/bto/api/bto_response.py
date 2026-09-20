@@ -524,6 +524,9 @@ def simulate_bto_spectrum(
         ``background`` may be a :class:`BTOBackground` or an explicitly
         documented array/mapping.  ``poisson``, ``random_seed``, and optional
         Type-I ``output_pha`` writing control the fake realization.
+        With ``poisson=False``, PHA stores the unrounded expectation as RATE,
+        POISSERR=False, and explicit Poisson-equivalent STAT_ERR=sqrt(expected
+        counts)/exposure (an assumed counting error, not a sampled fluctuation).
     Output
         :class:`BTOSpectrumSimulation` with source, background, total expected,
         and simulated counts per channel.  A callable photon model is treated
@@ -591,6 +594,8 @@ def load_bto_response(response_file, *, arf_file=None) -> BTOResponseProduct:
 
     Optional input
         ``arf_file`` is required only when ``response_file`` is a standalone RMF.
+        Its ENERG_LO/ENERG_HI bins must match the RMF (rtol=1e-7, atol=0,
+        allowing float32 ARF versus float64 RMF serialization); otherwise ValueError.
     Output
         :class:`BTOResponseProduct` reconstructed from OGIP.  Geant4 deposit
         matrices are unavailable in OGIP and are represented by zero placeholders.
@@ -1375,7 +1380,9 @@ def _load_bto_response_impl(response_file, *, arf_file=None) -> BTOResponseProdu
     with fits.open(response_path, memmap=False, checksum=True) as hdul:
         matrix_hdu = hdul["MATRIX"]
         matrix = _read_dense_ogip_matrix(matrix_hdu)
-        true_edges = np.append(matrix_hdu.data["ENERG_LO"].astype(float), float(matrix_hdu.data["ENERG_HI"][-1]))
+        true_lo = matrix_hdu.data["ENERG_LO"].astype(float)
+        true_hi = matrix_hdu.data["ENERG_HI"].astype(float)
+        true_edges = np.append(true_lo, true_hi[-1])
         ebounds = hdul["EBOUNDS"].data
         measured_edges = np.append(ebounds["E_MIN"].astype(float), float(ebounds["E_MAX"][-1]))
         detector_name = matrix_hdu.header.get("DETNAM", "BTO1")
@@ -1413,7 +1420,14 @@ def _load_bto_response_impl(response_file, *, arf_file=None) -> BTOResponseProdu
         if arf_file is None:
             raise ValueError("arf_file is required when loading a standalone RMF")
         with fits.open(Path(arf_file).expanduser().resolve(), memmap=False, checksum=True) as hdul:
-            arf = np.asarray(hdul["SPECRESP"].data["SPECRESP"], dtype=float)
+            arf_data = hdul["SPECRESP"].data
+            # Check every lower AND upper edge before multiplying rows by area.
+            if len(arf_data) != len(true_lo) or any(
+                not np.allclose(arf_data[column], edges, rtol=1e-7, atol=0.0)
+                for column, edges in (("ENERG_LO", true_lo), ("ENERG_HI", true_hi))
+            ):
+                raise ValueError("ARF true-energy bins (ENERG_LO/ENERG_HI) do not match RMF")
+            arf = np.asarray(arf_data["SPECRESP"], dtype=float)
         rsp = arf[:, None] * rmf
     empty_deposit_edges = true_edges.copy()
     empty_area = np.zeros((len(true_edges) - 1, len(true_edges) - 1), dtype=float)
@@ -1784,24 +1798,30 @@ def _write_pha(
     response: BTOResponseProduct,
     background_file: str,
     *,
+    poisson: bool,
     overwrite: bool,
 ) -> None:
     fits = _fits_module()
     n_channel = len(counts)
     columns = [
         fits.Column(name="CHANNEL", format="J", array=np.arange(n_channel, dtype=np.int32)),
-        fits.Column(name="COUNTS", format="J", unit="count", array=np.asarray(counts, dtype=np.int64)),
+        (fits.Column(name="COUNTS", format="J", unit="count", array=np.asarray(counts, dtype=np.int64))
+         if poisson else fits.Column(name="RATE", format="D", unit="count/s", array=counts / exposure_s)),
         fits.Column(name="QUALITY", format="I", array=np.zeros(n_channel, dtype=np.int16)),
         fits.Column(name="GROUPING", format="I", array=np.ones(n_channel, dtype=np.int16)),
         fits.Column(name="AREASCAL", format="E", array=np.ones(n_channel, dtype=np.float32)),
         fits.Column(name="BACKSCAL", format="E", array=np.ones(n_channel, dtype=np.float32)),
     ]
+    if not poisson:
+        # Preserve fractional expectations; specify counting errors explicitly.
+        columns.append(fits.Column(name="STAT_ERR", format="D", unit="count/s",
+                                   array=np.sqrt(counts) / exposure_s))
     spectrum = fits.BinTableHDU.from_columns(columns, name="SPECTRUM")
     header = spectrum.header
     header["HDUCLASS"] = "OGIP"
     header["HDUCLAS1"] = "SPECTRUM"
     header["HDUCLAS2"] = "TOTAL"
-    header["HDUCLAS3"] = "COUNT"
+    header["HDUCLAS3"] = "COUNT" if poisson else "RATE"
     header["HDUVERS"] = "1.2.1"
     header["TELESCOP"] = "COSI"
     header["INSTRUME"] = "BTO"
@@ -1812,7 +1832,10 @@ def _write_pha(
     header["TLMIN1"] = 0
     header["TLMAX1"] = n_channel - 1
     header["EXPOSURE"] = float(exposure_s)
-    header["POISSERR"] = True
+    header["POISSERR"] = bool(poisson)
+    if not poisson:
+        header.add_history("Unsampled expectation; STAT_ERR=sqrt(expected counts)/EXPOSURE.")
+        header.add_history("STAT_ERR is a Poisson-equivalent assumption, not measured scatter.")
     header["AREASCAL"] = 1.0
     header["BACKSCAL"] = 1.0
     header["RESPFILE"] = response.rmf_path.name if response.rmf_path else (response.rsp_path.name if response.rsp_path else "NONE")
@@ -1862,10 +1885,11 @@ def _simulate_bto_spectrum_impl(
         pha_path = Path(output_pha).expanduser().resolve()
         _write_pha(
             pha_path,
-            np.rint(simulated).astype(np.int64),
+            simulated,
             exposure_s,
             response,
             background_file,
+            poisson=bool(poisson),
             overwrite=bool(overwrite),
         )
     return BTOSpectrumSimulation(
