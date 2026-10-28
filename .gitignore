@@ -137,3 +137,7 @@ dmypy.json
 # IDEs
 # PyCharm / IntelliJ
 /.idea
+
+# For BTO: to avoid heavy response files being tracked in git
+/cosipy/nonimaging/bto/response/
+/cosipy/nonimaging/bto/notebook_output/

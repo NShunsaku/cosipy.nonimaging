@@ -1,7 +1,7 @@
 # BTO APIs and Tutorials for cosipy spectral fitting
 
-This project provides APIs and tutorials for incorporating BTO data into joint spectral analyses with Ge Compton telescope using the cosipy and threeML frameworks.  
-This includes a set of Jupyter notebooks that demonstrate how to construct BTO responses, generate fake observations, and compare COSI Compton-camera-only (CC) spectral fits with joint CC+BTO1+BTO2 fits.  
+This project provides APIs and tutorials for incorporating BTO data into joint spectral analyses with the COSI germanium detectors (GeD, using Compton events) using the cosipy and threeML frameworks.  
+This includes a set of Jupyter notebooks that demonstrate how to construct BTO responses, generate fake observations, and compare GeD-only spectral fits with joint GeD+BTO1+BTO2 fits.  
 The notebooks use standard cosipy likelihood classes, standard threeML `OGIPLike` plugins and the public `bto_response` module. 
 
 ------- 
@@ -10,9 +10,10 @@ The notebooks use standard cosipy likelihood classes, standard threeML `OGIPLike
 
 | Notebook                                                                       | What you learn                                                                                                                                                                |
 | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [01: BTO API and response quick looks](notebooks/01_bto_response_api.ipynb)    | Inspect HDF5, plot directional area maps, apply detector effects, write/read OGIP, regrid background, simulate a fake spectrum and load it in threeML. No CC input is needed. |
-| [02: Fixed cross-normalization](notebooks/02_grb_cc_bto_fixed_crossnorm.ipynb) | Generate CC and both BTO fake datasets, then fit CC only and CC+BTO1+BTO2 with both BTO effective-area correction factors fixed to one.                                       |
-| [03: Free cross-normalization](notebooks/03_grb_cc_bto_free_crossnorm.ipynb)   | Run the same experiment while independently fitting BTO1-to-CC and BTO2-to-CC factors in 0.5–1.5. CC remains the reference, not a frozen spectrum.                            |
+| [01: BTO API and response quick looks](tutorial/01_bto_response_api.ipynb)    | Inspect HDF5, plot directional area maps, apply detector effects, write/read OGIP, regrid background, simulate a fake spectrum and load it in threeML. No GeD input is needed. |
+| [02: Fixed cross-normalization](tutorial/02_grb_ged_bto_fixed_crossnorm.ipynb) | Generate GeD and both BTO fake datasets, then fit GeD only and GeD+BTO1+BTO2 with both BTO effective-area correction factors fixed to one.                                       |
+| [03: Free cross-normalization](tutorial/03_grb_ged_bto_free_crossnorm.ipynb)   | Run the same experiment while independently fitting BTO1-to-GeD and BTO2-to-GeD factors in 0.5–1.5. GeD remains the reference, not a frozen spectrum.                            |
+| [04: Solar-flare GeD+BTO counts](tutorial/04_solar_ged_bto_counts.ipynb) | Use the same solar photon table for GeD, BTO1 and BTO2; compare expected source/background/total count spectra and band-integrated rates. |
 
 Use the installed python kernel with cosipy, HistPy, Astropy, NumPy/SciPy, h5py, Matplotlib, pandas, astromodels and threeML. In Section 1, set only `project_path`.   
 All input paths use its `response/` subdirectory, and the BTO module is bundled in `api/`. 
@@ -29,8 +30,10 @@ project_path/
 │   ├── 20280301_3_month_with_orbital_info.fits
 │   ├── bkg_binned_data_1s_local.hdf5
 │   ├── bto_response_order2.h5
-│   └── BTO_background_template_10-3000keV.fits
-├── notebooks/                # Jupyter notebooks for the tutorial
+│   ├── BTO_background_template_10-3000keV.fits
+│   ├── flx2tab_input.dat
+│   └── Total_BG_3months_binned_for_continuum_filtered_with_SAAcut.hdf5
+├── tutorial/                # Jupyter notebooks for the tutorial
 └── notebook_output/          # Generated products, not inputs
 ```
 
@@ -41,9 +44,9 @@ This tutorial extends the cosipy [GRB spectral-fitting example](https://cositool
 ([source notebook](https://github.com/cositools/cosipy/blob/main/docs/tutorials/spectral_fits/continuum_fit/grb/SpectralFit_GRB.ipynb)).  
 The reference example identifies its simulated burst as **GRB090206620** and uses Galactic `(l,b)=(93,-53)` degrees. We adopt that simulated position and injected Band spectrum, generate new response-consistent Poisson data, and add the two BTO detectors. The 40 s interval starts at **2028-05-22 08:36:50 UTC** in the simulated spacecraft history; this is not the historical GRB date or a flight observation.
 
-The supplied **CC background contains the albedo-photon simulation** described by the cosipy example. It is not a total satellite-background model. Cosmic diffuse photons, charged particles, neutrons and activation/SAA components must not be assumed present. 
+The supplied **GeD background contains the albedo-photon simulation** described by the cosipy example. It is not a total satellite-background model. Cosmic diffuse photons, charged particles, neutrons and activation/SAA components must not be assumed present. 
 
-The BTO background is a different, 11-component simulation. Therefore the CC-versus-joint comparison teaches joint fitting and the effect of BTO in this specified example; it is **not a full-background mission sensitivity forecast**.
+The BTO background is a different, 11-component simulation. Therefore the GeD-versus-joint comparison teaches joint fitting and the effect of BTO in this specified example; it is **not a full-background mission sensitivity forecast**.
 
 
 ```python
@@ -63,25 +66,25 @@ Notebook outputs go under this project's `notebook_output/{fixed_crossnorm free_
 
 | Variable                                                                    | Default file                                                                            | Meaning                                                                                                                                                                                   |
 | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cc_response_path`                                                          | `response/SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.h5` | COSI Compton camera continum response used for tutorial.                                                                                                                                  |
+| `ged_response_path`                                                          | `response/SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.h5` | COSI Compton camera continum response used for tutorial.                                                                                                                                  |
 | `orientation_path`                                                          | `response/20280301_3_month_with_orbital_info.fits`                                      | Satellite information including timestamps, X/Z pointing, Earth zenith, altitude and livetime. Transforms the celestial source into spacecraft directions and supplies interval exposure. |
-| `cc_time_resolved_background_path`                                          | `response/bkg_binned_data_1s_local.hdf5`                                                | One-second albedo-photon CC background histogram in `Time, Em, Phi, PsiChi`. Supplies both measurement axes and OFF-background shape for tutorial.                                        |
+| `ged_time_resolved_background_path`                                          | `response/bkg_binned_data_1s_local.hdf5`                                                | One-second albedo-photon GeD background histogram in `Time, Em, Phi, PsiChi`. Supplies both measurement axes and OFF-background shape for tutorial.                                        |
 | `bto_response_h5_path` (`response_h5_path` in API notebook)                 | `response/bto_response_order2.h5`                                                       | All-direction, **unsmeared** Meaglib/Cosima BTO1/BTO2 deposit response. The input to detector-model application and new OGIP generation.                                                  |
 | `bto_background_template_path` (`background_template_path` in API notebook) | `response/BTO_background_template_10-3000keV.fits`                                      | Simulated mean single-BTO background spectrum in counts/s/channel. Constant in time for this example                                                                                      |
 
-The CC inputs are distributed by cosipy Wasabi server.  
+The GeD inputs are distributed by cosipy Wasabi server.  
 See cosipy lists for their download locations:  
 https://github.com/cositools/cosipy/blob/main/docs/api/interfaces/examples/grb/example_grb_fit_threeml_plugin_interfaces.py
-The BTO response and background file are not distributed; Please contact the BTO team for access.  
+The BTO response (`bto_response_order2.h5`) and background template (`BTO_background_template_10-3000keV.fits`) are not distributed. Contact the BTO team and place both files in `project_path / "response"`.  
 
 
 | Input             | Distribution key below `COSI-SMEX/`                                                                            | MD5                                |
 | ----------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| CC response       | `cosipy_tutorials/Data/Responses/SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.h5` | `eb72400a1279325e9404110f909c7785` |
+| GeD response       | `cosipy_tutorials/Data/Responses/SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.h5` | `eb72400a1279325e9404110f909c7785` |
 | Satellite History | `DC3/Data/Orientation/20280301_3_month_with_orbital_info.fits`                                                 | `5e69bc1d55fab9390f90635690f62896` |
-| CC background     | `cosipy_tutorials/grb_spectral_fit_local_frame/bkg_binned_data_1s_local.hdf5`                                  | `b842a7444e6fc1a5dd567b395c36ae7f` |
+| GeD background     | `cosipy_tutorials/grb_spectral_fit_local_frame/bkg_binned_data_1s_local.hdf5`                                  | `b842a7444e6fc1a5dd567b395c36ae7f` |
 
-The measured CC axes come directly from the background: `Em` has 10 bins from 100–10000 keV, `Phi` has 36 bins from 0–180 degrees, and `PsiChi` uses NSIDE=8/RING (768 pixels) in spacecraft coordinates.  
+The measured GeD axes come directly from the background: `Em` has 10 bins from 100–10000 keV, `Phi` has 36 bins from 0–180 degrees, and `PsiChi` uses NSIDE=8/RING (768 pixels) in spacecraft coordinates.  
 The likelihood operates on all `(10,36,768)` CDS bins. Count spectra are energy projections for plotting.  
 
 
@@ -119,9 +122,9 @@ The API reads the energy edges from the file and integrates fractional bin overl
 onto the response grid. It contains no template-specific channel-count/energy-step
 constants. 
 
-The prepared background template is included in `response/`; no raw component
-simulations or background-building script are needed for the tutorials. Its
-PROVENANCE extension records the simulation inputs and scale factors.
+The BTO response and background template are not distributed with this repository.
+Contact the BTO team for both files and place them in `project_path / "response"`.
+The background template's PROVENANCE extension records the simulation inputs and scale factors.
 The notebooks read this template and write a response-channelized OGIP BAK.
 
 ----
@@ -699,17 +702,17 @@ threshold and saturation:
 - `set_active_measurements` selects which already-recorded channels are used
   by the likelihood.
 
-For a joint CC+BTO fit, construct one response, background, fake/observed PHA
+For a joint GeD+BTO fit, construct one response, background, fake/observed PHA
 and `OGIPLike` plugin separately for BTO1 and BTO2. Assign both BTO plugins to
-the same astrophysical source used by the CC plugin:
+the same astrophysical source used by the GeD plugin:
 
 ```python
 bto1_plugin.assign_to_source(source_name)
 bto2_plugin.assign_to_source(source_name)
 ```
 
-The source model parameters are then shared across CC, BTO1 and BTO2. Optional
-BTO-to-CC cross-normalization parameters belong to the fitting layer, not to
+The source model parameters are then shared across GeD, BTO1 and BTO2. Optional
+BTO-to-GeD cross-normalization parameters belong to the fitting layer, not to
 the response matrix itself.
 
 ### Complete minimal recipe
@@ -839,3 +842,54 @@ For BTO2, repeat the same sequence with `"BTO2"` and a different output prefix.
 Do not reuse the BTO1 response object for BTO2, because the two detector
 geometries and direction-dependent effective areas are stored separately in
 the master HDF5.
+
+
+## GeD measured-energy fit interval
+
+The GRB notebooks define `ged_fit_range_keV = (100.0, 10000.0)` in their settings
+cell, retaining the original full-range example by default. Change the bounds
+to select complete native measured-energy bins. The actual bin boundaries are
+printed, and gray shading with dashed edges marks the GeD fit range in count
+plots. Data, source and background expectations use the same selection in the
+standard COSIpy Poisson likelihood. The GeD background normalization remains
+the total rate over its original native range. The source response and fake
+data retain all bins, preserving the seeded realization when the range changes.
+Figures use larger type, 300 dpi PNG output and companion vector PDFs.
+
+For a background BAK without EBOUNDS, `get_bto_background` reads EBOUNDS from
+the explicitly supplied `background_rmf`, or from the BAK's RESPFILE header.
+Relative file associations are resolved beside the file containing the header.
+If regridding is needed, call `get_bto_background`, write its new BAK with
+`write_ogip_background`, and then pass that object/file to `simulate_bto_spectrum`.
+
+
+## Solar-flare expected counts (Notebook 04)
+
+`04_solar_ged_bto_counts.ipynb` extends the existing solar GeD count example.
+It uses the 2028-03-01 12:00--12:10 UTC interval, the same legacy orientation
+and solar photon table, and both BTO directional responses with the selected
+detector effects. This is a tabulated model example, not a GOES-class calibration.
+
+The two additional scientific inputs belong in `response/`:
+
+| File | Meaning |
+|---|---|
+| `flx2tab_input.dat` | 99,990 bins of integrated solar photon flux, 1--10,000 keV at 0.1-keV spacing; nuclear de-excitation, 2.223-MeV capture line, annihilation/positronium, thermal and triple-power-law components |
+| `Total_BG_3months_binned_for_continuum_filtered_with_SAAcut.hdf5` | DC3 combined photon/particle background after SAA cuts; its energy projection supplies a three-month mean, unlike the GRB albedo-only example |
+
+`response/solar_input_manifest.json` records input identities and their source
+locations. The original OSPEX generator and notes are in `response/solar_model_provenance/`.
+The shared GeD response and history are reused. BTO response/background files
+remain non-distributed inputs obtained from the BTO team.
+
+The notebook integrates tabulated photons into each true-energy response bin,
+preserving narrow-line photon flux. Source counts use source-visible livetime;
+background counts use instrument livetime. Rate totals use selected complete
+native measured bins, with the actual windows printed in the table. BTO models
+true photons only through 3 MeV, whereas GeD extends to 10 MeV.
+
+Outputs in `notebook_output/solar_counts/` include the GeD+BTO source/background/total
+overlay (PNG/PDF), effective-area comparison, `solar_count_rates.csv`,
+`solar_native_count_spectra.csv` and `solar_count_summary.json`. The calculations
+use arrays in memory; exported tables are never input dependencies. Rates are
+ideal linear expectations with no added Poisson noise, dead time or pile-up.

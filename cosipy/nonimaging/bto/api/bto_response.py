@@ -174,6 +174,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import warnings
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
@@ -190,7 +191,7 @@ except ImportError as exc:  # pragma: no cover - dependency is present in produc
     raise ImportError("bto_response requires scipy (scipy.special.ndtr)") from exc
 
 
-__version__ = "2.2.0"
+__version__ = "2.2.1"
 
 FWHM_TO_SIGMA = 1.0 / (2.0 * math.sqrt(2.0 * math.log(2.0)))
 DEFAULT_REFERENCE_BACKGROUND = (
@@ -488,6 +489,8 @@ def get_bto_background(
         is retained for PHA compatibility. For a file without EBOUNDS, provide
         ``background_energy_edges_keV`` (n_channel+1 boundaries in keV), or
         ``background_rmf`` for compatibility, but not both. This background
+        RMF can also be located through the spectrum's RESPFILE header, resolved
+        relative to the spectrum file when no explicit grid is supplied.
         grid is independent of the new detector's gain/channel calibration.
         With no source argument, the module's 10--3000 keV reference template
         is used. Rates outside the template energy range are zero, not extrapolated.
@@ -1058,6 +1061,8 @@ def _get_bto_response_impl(
     mode = _validate_direction_mode(
         theta_deg, phi_deg, spacecraft_vector, orientation_file, source_coord, tstart, tstop
     )
+    if mode == "fixed" and earth_occultation:
+        raise ValueError("earth_occultation=True requires orientation mode to determine the Earth horizon")
     calibration = DEFAULT_CALIBRATION if calibration is None else calibration
     resolution = Prototype_Resolution if resolution is None else resolution
     calibration = _select_for_detector(calibration, detector_name, BTOCalibration)
@@ -1385,7 +1390,9 @@ def _load_bto_response_impl(response_file, *, arf_file=None) -> BTOResponseProdu
         true_edges = np.append(true_lo, true_hi[-1])
         ebounds = hdul["EBOUNDS"].data
         measured_edges = np.append(ebounds["E_MIN"].astype(float), float(ebounds["E_MAX"][-1]))
-        detector_name = matrix_hdu.header.get("DETNAM", "BTO1")
+        detector_name = matrix_hdu.header.get("DETNAM", hdul[0].header.get("DETNAM"))
+        if detector_name is None:
+            raise ValueError("response FITS is missing DETNAM; cannot identify BTO1/BTO2")
         combined = str(matrix_hdu.header.get("HDUCLAS3", "")).strip().upper() == "FULL"
         cal = BTOCalibration(
             n_channels=len(measured_edges) - 1,
@@ -1420,6 +1427,9 @@ def _load_bto_response_impl(response_file, *, arf_file=None) -> BTOResponseProdu
         if arf_file is None:
             raise ValueError("arf_file is required when loading a standalone RMF")
         with fits.open(Path(arf_file).expanduser().resolve(), memmap=False, checksum=True) as hdul:
+            arf_detector = hdul["SPECRESP"].header.get("DETNAM", hdul[0].header.get("DETNAM"))
+            if arf_detector is None or str(arf_detector).strip().upper() != str(detector_name).strip().upper():
+                raise ValueError(f"ARF DETNAM {arf_detector!r} does not match RMF DETNAM {detector_name!r}")
             arf_data = hdul["SPECRESP"].data
             # Check every lower AND upper edge before multiplying rows by area.
             if len(arf_data) != len(true_lo) or any(
@@ -1486,11 +1496,14 @@ def _integrate_callable(model: Callable, edges: np.ndarray, order: int = 16) -> 
                 "photon_model callable failed for numeric keV and Astropy keV inputs"
             ) from first_error
     if hasattr(values, "to_value"):
+        import astropy.units as u
         try:
-            import astropy.units as u
-            values = values.to_value(1 / (u.cm**2 * u.s * u.keV))
-        except Exception:
-            values = values.value
+            flux_unit = 1 / (u.cm**2 * u.s * u.keV)
+            if hasattr(values, "unit") and values.unit.is_equivalent(u.photon * flux_unit):
+                flux_unit = u.photon * flux_unit
+            values = values.to_value(flux_unit)
+        except u.UnitConversionError as exc:
+            raise ValueError("photon_model Quantity must be convertible to ph cm^-2 s^-1 keV^-1") from exc
     values = np.asarray(values, dtype=np.float64)
     try:
         values = np.broadcast_to(values, evaluation_energies.shape).reshape(energies.shape)
@@ -1610,6 +1623,7 @@ def _get_bto_background_impl(
             data = hdul["SPECTRUM"].data
             names = set(data.names)
             exposure = float(hdul["SPECTRUM"].header.get("EXPOSURE", 1.0))
+            response_reference = str(hdul["SPECTRUM"].header.get("RESPFILE", "NONE")).strip()
             channels = np.asarray(data["CHANNEL"], dtype=int)
             if "RATE" in names:
                 native_rate = np.asarray(data["RATE"], dtype=float)
@@ -1631,19 +1645,31 @@ def _get_bto_background_impl(
                 embedded_edges = np.append(lo, hi[-1])
         if np.any(~np.isfinite(native_rate)) or np.any(native_rate < 0):
             raise ValueError("background input rate must be finite and nonnegative")
+        # A channelized BAK normally refers to its RMF rather than embedding
+        # another EBOUNDS table. Resolve that reference beside the BAK itself.
+        if (embedded_edges is None and background_energy_edges_keV is None
+                and background_rmf is None and response_reference.upper() not in ("", "NONE")):
+            referenced_rmf = Path(response_reference).expanduser()
+            if not referenced_rmf.is_absolute():
+                referenced_rmf = pha_path.parent / referenced_rmf
+            background_rmf = referenced_rmf.resolve()
         if background_energy_edges_keV is not None:
             source_edges = np.asarray(background_energy_edges_keV, dtype=float)
             grid_provenance = "user-supplied background energy boundaries [keV]"
         elif background_rmf is not None:
             rmf_path = Path(background_rmf).expanduser().resolve()
             with fits.open(rmf_path, memmap=False) as hdul:
-                ebounds = hdul["EBOUNDS"].data
+                ebounds_hdu = hdul["EBOUNDS"]
+                ebounds = ebounds_hdu.data
                 if not np.array_equal(ebounds["CHANNEL"], channels):
                     raise ValueError("PHA and background RMF CHANNEL values must agree")
-                if not np.allclose(ebounds["E_MAX"][:-1], ebounds["E_MIN"][1:]):
+                import astropy.units as u
+                lo = np.asarray(ebounds["E_MIN"], float) * u.Unit(ebounds_hdu.columns["E_MIN"].unit or "keV").to(u.keV)
+                hi = np.asarray(ebounds["E_MAX"], float) * u.Unit(ebounds_hdu.columns["E_MAX"].unit or "keV").to(u.keV)
+                if np.any(hi <= lo) or not np.allclose(hi[:-1], lo[1:], rtol=0, atol=1e-8):
                     raise ValueError("background RMF energy bins must be contiguous")
-                source_edges = np.append(np.asarray(ebounds["E_MIN"], float), float(ebounds["E_MAX"][-1]))
-            grid_provenance = "explicit background RMF EBOUNDS"
+                source_edges = np.append(lo, hi[-1])
+            grid_provenance = "background RMF EBOUNDS (explicit or RESPFILE reference)"
         elif embedded_edges is not None:
             source_edges = embedded_edges
             grid_provenance = "embedded EBOUNDS in background template"
@@ -1679,6 +1705,32 @@ def _get_bto_background_impl(
     )
 
 
+def _validate_background_for_response(background: BTOBackground, response: BTOResponseProduct) -> np.ndarray:
+    """Check rates and channel calibration before folding or writing a BAK."""
+    rate = np.asarray(background.rate_per_channel, dtype=np.float64)
+    if rate.shape != (response.rsp_cm2.shape[1],):
+        raise ValueError("BTOBackground channel count does not match response")
+    if np.any(~np.isfinite(rate)) or np.any(rate < 0):
+        raise ValueError("background rate must be finite and nonnegative")
+    edges = np.asarray(background.measured_energy_edges_keV, dtype=np.float64)
+    expected = response.measured_energy_edges_keV
+    if (edges.shape != expected.shape or np.any(~np.isfinite(edges))
+            or not np.allclose(edges, expected, rtol=0.0, atol=1e-10)):
+        raise ValueError("background measured-energy edges do not match response")
+    return rate
+
+
+def _ogip_file_reference(file_path, spectrum_path: Path) -> str:
+    """Represent an OGIP association relative to the file containing it."""
+    if file_path is None or str(file_path).strip().upper() in ("", "NONE"):
+        return "NONE"
+    target = Path(file_path).expanduser().resolve()
+    try:
+        return Path(os.path.relpath(target, spectrum_path.parent)).as_posix()
+    except ValueError:  # Different Windows drives cannot share a relative path.
+        return str(target)
+
+
 def _write_ogip_background_impl(
     background: BTOBackground,
     response: BTOResponseProduct,
@@ -1698,17 +1750,9 @@ def _write_ogip_background_impl(
     exposure_s = float(exposure_s)
     if not np.isfinite(exposure_s) or exposure_s <= 0:
         raise ValueError("exposure_s must be finite and positive")
-    rate = np.asarray(background.rate_per_channel, dtype=np.float64)
+    rate = _validate_background_for_response(background, response)
     n_channel = response.rsp_cm2.shape[1]
-    if rate.shape != (n_channel,):
-        raise ValueError("background channel count does not match response")
-    if not np.allclose(
-        background.measured_energy_edges_keV,
-        response.measured_energy_edges_keV,
-        rtol=0.0,
-        atol=1.0e-10,
-    ):
-        raise ValueError("background measured-energy edges do not match response")
+    path = Path(output_bak).expanduser().resolve()
     rate_error = np.sqrt(np.clip(rate * exposure_s, 0.0, None)) / exposure_s
     columns = [
         fits.Column(name="CHANNEL", format="J", array=np.arange(n_channel, dtype=np.int32)),
@@ -1739,8 +1783,8 @@ def _write_ogip_background_impl(
     header["POISSERR"] = False
     header["AREASCAL"] = 1.0
     header["BACKSCAL"] = 1.0
-    header["RESPFILE"] = response.rmf_path.name if response.rmf_path else (response.rsp_path.name if response.rsp_path else "NONE")
-    header["ANCRFILE"] = response.arf_path.name if response.arf_path else "NONE"
+    header["RESPFILE"] = _ogip_file_reference(response.rmf_path or response.rsp_path, path)
+    header["ANCRFILE"] = _ogip_file_reference(response.arf_path, path)
     header["BACKFILE"] = "NONE"
     header["CORRFILE"] = "NONE"
     header["CORRSCAL"] = 1.0
@@ -1752,7 +1796,6 @@ def _write_ogip_background_impl(
     primary.header["TELESCOP"] = "COSI"
     primary.header["INSTRUME"] = "BTO"
     primary.header["DETNAM"] = response.detector_name
-    path = Path(output_bak).expanduser().resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
     fits.HDUList([primary, spectrum]).writeto(path, overwrite=overwrite, checksum=True)
     background.path = path
@@ -1766,9 +1809,8 @@ def _background_counts(background: Any, response: BTOResponseProduct, exposure_s
     if background is None:
         return np.zeros(n_channel), "NONE"
     if isinstance(background, BTOBackground):
-        if background.rate_per_channel.shape != (n_channel,):
-            raise ValueError("BTOBackground channel count does not match response")
-        return background.rate_per_channel * exposure_s, background.path.name if background.path else "NONE"
+        rate = _validate_background_for_response(background, response)
+        return rate * exposure_s, str(background.path.resolve()) if background.path else "NONE"
     if isinstance(background, Mapping):
         allowed = set(background) & {"rate_per_channel", "counts_per_channel"}
         if len(allowed) != 1:
@@ -1779,7 +1821,11 @@ def _background_counts(background: Any, response: BTOResponseProduct, exposure_s
         source = "NONE"
     elif isinstance(background, (str, Path)):
         loaded = get_bto_background(response, background_pha=background)
-        return loaded.rate_per_channel * exposure_s, Path(background).name
+        source_edges = np.asarray(loaded.metadata["source_energy_edges_keV"], dtype=float)
+        target_edges = response.measured_energy_edges_keV
+        if source_edges.shape != target_edges.shape or not np.allclose(source_edges, target_edges, rtol=0, atol=1e-10):
+            raise ValueError("background file grid differs from response; call get_bto_background and write_ogip_background on the new grid first")
+        return loaded.rate_per_channel * exposure_s, str(Path(background).expanduser().resolve())
     else:
         values = np.asarray(background, dtype=float)
         counts = values * exposure_s  # bare arrays are explicitly rates
@@ -1838,9 +1884,9 @@ def _write_pha(
         header.add_history("STAT_ERR is a Poisson-equivalent assumption, not measured scatter.")
     header["AREASCAL"] = 1.0
     header["BACKSCAL"] = 1.0
-    header["RESPFILE"] = response.rmf_path.name if response.rmf_path else (response.rsp_path.name if response.rsp_path else "NONE")
-    header["ANCRFILE"] = response.arf_path.name if response.arf_path else "NONE"
-    header["BACKFILE"] = background_file
+    header["RESPFILE"] = _ogip_file_reference(response.rmf_path or response.rsp_path, output_path)
+    header["ANCRFILE"] = _ogip_file_reference(response.arf_path, output_path)
+    header["BACKFILE"] = _ogip_file_reference(background_file, output_path)
     header["CORRFILE"] = "NONE"
     header["CORRSCAL"] = 1.0
     _metadata_history(header, response.metadata)
